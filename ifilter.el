@@ -20,6 +20,8 @@
 ;;
 ;; - `RET' in the filter field or on the button, and `C-c C-u', update
 ;;   the filter.
+;; - `C-c C-/', and `/' outside the filter field, read the filter in
+;;   the minibuffer, and apply it.
 ;; - `C-c C-s' suspends updating the filter automatically.
 ;; - `g' collects the candidates again, keeping the filter.
 ;;
@@ -76,14 +78,16 @@
 (defvar-keymap ifilter-field-map
   :parent widget-field-keymap
   "C-c C-u" #'ifilter-update
-  "C-c C-s" #'ifilter-toggle-suspend)
+  "C-c C-s" #'ifilter-toggle-suspend
+  "C-c C-/" #'ifilter-read-filter)
 
 (defun ifilter-render (candidates)
   "Show CANDIDATES in the current buffer under the filter field.
 A candidate is (STRING . DATA).  Each line shows STRING, with its
 newlines shown as \"^J\", and has the candidate as the property
 `ifilter-candidate'.  The candidates of empty STRING are skipped.
-Keep the input of the filter, apply it, and clear the undo history."
+Keep the input of the filter, apply it, clear the undo history, and
+move point to the beginning of the buffer."
   (let ((input (if ifilter--widget (widget-value ifilter--widget) ""))
         (inhibit-read-only t)
         (buffer-undo-list t))
@@ -114,7 +118,8 @@ Keep the input of the filter, apply it, and clear the undo history."
                                  'ifilter-candidate candidate)))))
   (setq buffer-undo-list nil
         ifilter--last-input nil)
-  (ifilter-update))
+  (ifilter-update)
+  (goto-char (point-min)))
 
 (defun ifilter-candidate ()
   "Return the candidate at point, nil if none."
@@ -150,8 +155,7 @@ It has the property `ifilter', to be deleted by updating the filter."
 (defun ifilter-update ()
   "Apply the filter, if changed.
 Match it in the text of each line, hide the lines not matching it and
-highlight the matches, by overlays made again.  Move point to the
-beginning of the buffer, unless in the filter field.
+highlight the matches, by overlays made again.
 Unlike updating automatically, it is not suspended."
   (interactive)
   (let ((input (widget-value ifilter--widget)))
@@ -176,14 +180,21 @@ Unlike updating automatically, it is not suspended."
                     ;; numbers of the lines shown are their own.
                     (ifilter--make-overlay (1- (pos-bol)) (pos-eol) 'invisible 'ifilter)))
                 (forward-line 1)))
-            (setq ifilter--last-input input)
-            (unless (widget-field-at (point))
-              (goto-char (point-min))))
+            (setq ifilter--last-input input))
         ;; The input is often an invalid regexp while typing it.
         (invalid-regexp
          (message "Invalid regexp: %s" (cadr err)))
         (quit
          (message "Quit"))))))
+
+(defun ifilter-read-filter ()
+  "Read the filter in the minibuffer, and apply it at once, keeping point."
+  (interactive)
+  (let ((input (read-string "Filter: " (widget-value ifilter--widget))))
+    ;; Setting the field moves point.
+    (save-excursion
+      (widget-value-set ifilter--widget input))
+    (ifilter-update)))
 
 (defvar-local ifilter--suspend-p nil
   "Non-nil if updating the filter automatically is suspended.")
@@ -241,7 +252,9 @@ Call it in the body of a child mode of `ifilter-mode'."
   ;; `widget-keymap' presses the buttons, and moves between the widgets.
   :parent (make-composed-keymap widget-keymap special-mode-map)
   "C-c C-u" #'ifilter-update
-  "C-c C-s" #'ifilter-toggle-suspend)
+  "C-c C-s" #'ifilter-toggle-suspend
+  "C-c C-/" #'ifilter-read-filter
+  "/" #'ifilter-read-filter)
 
 (define-derived-mode ifilter-mode special-mode "IFilter"
   "Parent mode of the buffers filtering a list.

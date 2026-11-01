@@ -88,6 +88,24 @@ The filter is not updated automatically."
     (ifilter-test-input "")
     (should (equal (mapcar #'cdr (ifilter-test-shown)) '(1 2 3)))))
 
+(ert-deftest ifilter-test-read-filter ()
+  (ifilter-test-with-buffer
+    (ifilter-test-input "foo")
+    ;; On the candidate 2, kept by the filter.
+    (goto-char (point-min))
+    (forward-line 2)
+    (forward-char 2)
+    (let ((pos (point)))
+      (cl-letf (((symbol-function 'read-string)
+                 (lambda (_prompt initial) (concat initial " baz"))))
+        (call-interactively (keymap-lookup ifilter-mode-map "/")))
+      ;; Not shifted, as the field is padded to its width.
+      (should (= (point) pos)))
+    (should (equal (cdr (ifilter-candidate)) 2))
+    (should (eq (keymap-lookup ifilter-field-map "C-c C-/") #'ifilter-read-filter))
+    (should (equal (widget-value ifilter--widget) "foo baz"))
+    (should (equal (mapcar #'cdr (ifilter-test-shown)) '(2)))))
+
 (ert-deftest ifilter-test-hide-last ()
   (ifilter-test-with-buffer
     (ifilter-test-input "foo")

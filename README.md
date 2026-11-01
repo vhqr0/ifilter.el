@@ -24,6 +24,8 @@ In the buffer:
 
 - `RET` in the filter field or on the button, and `C-c C-u`, update the
   filter.
+- `C-c C-/`, and `/` outside the filter field, read the filter in the
+  minibuffer, and apply it.
 - `C-c C-s` suspends updating the filter automatically.
 - `g` collects the candidates again, keeping the filter.
 
