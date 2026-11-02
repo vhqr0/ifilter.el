@@ -26,7 +26,7 @@
 ;; - `g' collects the candidates again, keeping the filter.
 ;;
 ;; A tool is a child mode of `ifilter-mode' and a command opening its
-;; buffer by `ifilter-open'.  The mode binds the commands on the
+;; buffer.  The mode binds the commands on the
 ;; candidates, which get the candidate at point by `ifilter-candidate',
 ;; sets `revert-buffer-function' to collect the candidates again and call
 ;; `ifilter-render'.
@@ -40,6 +40,10 @@
 ;;   `M-RET' are as in `ifilter-imenu'.
 ;; - `ifilter-kill-ring' shows the kill ring.  `RET' makes a kill the
 ;;   latest one.
+;;
+;; `ifilter-imenu' and `ifilter-outline' each show in one buffer.
+;; Called from another buffer, they show its items instead, clearing
+;; the filter.
 ;;
 ;; The filter is updated automatically `ifilter-delay' seconds after the
 ;; last command.  To wait longer, or never:
@@ -230,6 +234,20 @@ Resuming updates it at once."
     (cancel-timer ifilter--timer)
     (setq ifilter--timer nil)))
 
+(defun ifilter--cleanup ()
+  "Cancel the timer, and delete the filter field and the candidates.
+Run before changing the major mode, which kills the local variables
+referring to them."
+  (ifilter--cancel-timer)
+  (let ((inhibit-read-only t))
+    (when ifilter--widget
+      (widget-delete ifilter--widget)
+      (setq ifilter--widget nil))
+    (remove-overlays (point-min) (point-max) 'ifilter t)
+    ;; Including the text typed at the beginning of the field, which
+    ;; `widget-delete' misses.
+    (erase-buffer)))
+
 ;;;; mode
 
 (defvar-keymap ifilter-mode-map
@@ -249,6 +267,7 @@ automatically as `ifilter-delay'."
   (setq buffer-read-only nil)
   (setq truncate-lines t)
   (add-to-invisibility-spec 'ifilter)
+  (add-hook 'change-major-mode-hook #'ifilter--cleanup nil t)
   (unless (minusp ifilter-delay)
     ;; Update by a timer replacing the one of the last command.
     (add-hook 'post-command-hook
@@ -258,26 +277,7 @@ automatically as `ifilter-delay'."
                       (run-with-timer ifilter-delay nil #'ifilter--auto-update
                                       (current-buffer))))
               nil t)
-    (add-hook 'kill-buffer-hook #'ifilter--cancel-timer nil t)
-    (add-hook 'change-major-mode-hook #'ifilter--cancel-timer nil t)))
-
-(defun ifilter-open (name mode collect &optional setup)
-  "Switch to the buffer NAME in another window.
-If there is no such buffer, get the candidates by calling COLLECT, then
-create it in MODE, call SETUP in it if non-nil, and show the candidates.
-Signal `user-error' in a buffer of `ifilter-mode'."
-  (when (derived-mode-p 'ifilter-mode)
-    (user-error "Already in an ifilter buffer"))
-  (let ((buffer (get-buffer name)))
-    (unless buffer
-      (let ((candidates (funcall collect)))
-        (setq buffer (generate-new-buffer name))
-        (with-current-buffer buffer
-          (funcall mode)
-          (when setup
-            (funcall setup))
-          (ifilter-render candidates))))
-    (switch-to-buffer-other-window buffer)))
+    (add-hook 'kill-buffer-hook #'ifilter--cancel-timer nil t)))
 
 ;;; imenu
 
@@ -342,11 +342,23 @@ If DISPLAY is non-nil, only display it, keeping the selected window."
   "Show the index of the current buffer, as by `imenu', to filter."
   (interactive)
   (require 'imenu)
-  (let ((buffer (current-buffer)))
-    (ifilter-open (format "*ifilter-imenu: %s*" (buffer-name))
-                  #'ifilter-imenu-mode
-                  (lambda () (ifilter-imenu--candidates buffer))
-                  (lambda () (setq ifilter-imenu--buffer buffer)))))
+  (when (derived-mode-p 'ifilter-mode)
+    (user-error "Already in an ifilter buffer"))
+  (let ((source (current-buffer))
+        (buffer (get-buffer-create "*ifilter-imenu*")))
+    ;; Show the index of another buffer again in the mode entered again,
+    ;; clearing the filter.
+    (unless (with-current-buffer buffer
+              (and (derived-mode-p 'ifilter-imenu-mode)
+                   (eq ifilter-imenu--buffer source)))
+      (let ((candidates (ifilter-imenu--candidates source))
+            (dir default-directory))
+        (with-current-buffer buffer
+          (ifilter-imenu-mode)
+          (setq ifilter-imenu--buffer source
+                default-directory dir)
+          (ifilter-render candidates))))
+    (switch-to-buffer-other-window buffer)))
 
 ;;; outline
 
@@ -433,11 +445,22 @@ If DISPLAY is non-nil, only display it, keeping the selected window."
 (defun ifilter-outline ()
   "Show the outline headings of the current buffer to filter."
   (interactive)
-  (let ((buffer (current-buffer)))
-    (ifilter-open (format "*ifilter-outline: %s*" (buffer-name))
-                  #'ifilter-outline-mode
-                  (lambda () (ifilter-outline--candidates buffer))
-                  (lambda () (setq ifilter-outline--buffer buffer)))))
+  (when (derived-mode-p 'ifilter-mode)
+    (user-error "Already in an ifilter buffer"))
+  (let ((source (current-buffer))
+        (buffer (get-buffer-create "*ifilter-outline*")))
+    ;; As in `ifilter-imenu'.
+    (unless (with-current-buffer buffer
+              (and (derived-mode-p 'ifilter-outline-mode)
+                   (eq ifilter-outline--buffer source)))
+      (let ((candidates (ifilter-outline--candidates source))
+            (dir default-directory))
+        (with-current-buffer buffer
+          (ifilter-outline-mode)
+          (setq ifilter-outline--buffer source
+                default-directory dir)
+          (ifilter-render candidates))))
+    (switch-to-buffer-other-window buffer)))
 
 ;;; kill ring
 
@@ -472,8 +495,14 @@ If DISPLAY is non-nil, only display it, keeping the selected window."
 (defun ifilter-kill-ring ()
   "Show the kill ring to filter."
   (interactive)
-  (ifilter-open "*ifilter-kill-ring*" #'ifilter-kill-ring-mode
-                #'ifilter-kill-ring--candidates))
+  (let ((buffer (get-buffer "*ifilter-kill-ring*")))
+    (unless buffer
+      (let ((candidates (ifilter-kill-ring--candidates)))
+        (setq buffer (generate-new-buffer "*ifilter-kill-ring*"))
+        (with-current-buffer buffer
+          (ifilter-kill-ring-mode)
+          (ifilter-render candidates))))
+    (switch-to-buffer-other-window buffer)))
 
 (provide 'ifilter)
 ;;; ifilter.el ends here

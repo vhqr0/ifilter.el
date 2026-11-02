@@ -175,26 +175,59 @@ The filter is not updated automatically."
     (should (eq (key-binding (kbd "RET")) #'widget-button-press))
     (should (eq (key-binding (kbd "C-c C-u")) #'ifilter-update))))
 
-(ert-deftest ifilter-test-open ()
-  (let ((name " *ifilter-test-open*")
-        (collected 0))
+(defmacro ifilter-test-with-outline-source (dir &rest body)
+  "Run BODY in a new buffer of headings with DIR as `default-directory'."
+  (declare (indent 1))
+  `(with-temp-buffer
+     (insert ";;; a\n;;; b\n")
+     (setq-local outline-regexp ";;;+ ")
+     (setq-local outline-level (lambda () (- (match-end 0) (match-beginning 0) 3)))
+     (setq default-directory ,dir)
+     ,@body))
+
+(ert-deftest ifilter-test-outline-open ()
+  (let ((name "*ifilter-outline*"))
+    (when (get-buffer name)
+      (kill-buffer name))
     (unwind-protect
-        (cl-flet ((collect ()
-                    (setq collected (1+ collected))
-                    ifilter-test-candidates))
-          (save-window-excursion
-            (should-error (ifilter-open name #'ifilter-mode (lambda () (error "No candidates"))))
-            (should-not (get-buffer name))
-            (ifilter-open name #'ifilter-mode #'collect)
-            (should (equal (buffer-name) name))
-            (should (equal (mapcar #'cdr (ifilter-test-shown)) '(1 2 3)))
-            (should-error (ifilter-open name #'ifilter-mode #'collect) :type 'user-error)
-            (other-window 1)
-            (ifilter-open name #'ifilter-mode #'collect)
-            (should (equal (buffer-name) name))
-            (should (= collected 1))))
+        (save-window-excursion
+          (ifilter-test-with-outline-source "/a/"
+            (let ((source (current-buffer)))
+              (ifilter-outline)
+              (should (equal (buffer-name) name))
+              (should (eq ifilter-outline--buffer source))
+              (should (equal default-directory "/a/"))
+              (should-error (ifilter-outline) :type 'user-error)
+              (ifilter-test-input "b")
+              ;; From the same buffer, keep the filter.
+              (with-current-buffer source
+                (ifilter-outline))
+              (should (equal (widget-value ifilter--widget) "b"))
+              (ifilter-test-with-outline-source "/b/"
+                (let ((source (current-buffer)))
+                  ;; From another buffer, show its headings and clear
+                  ;; the filter.
+                  (ifilter-outline)
+                  (should (eq ifilter-outline--buffer source))
+                  (should (equal default-directory "/b/"))
+                  (should (equal (widget-value ifilter--widget) ""))
+                  (should (= (length widget-field-list) 1))
+                  (should (equal (mapcar #'car (ifilter-test-shown))
+                                 '(";;; a" ";;; b")))
+                  (should-not (seq-some (lambda (overlay) (overlay-get overlay 'ifilter))
+                                        (overlays-in (point-min) (point-max)))))))))
       (when (get-buffer name)
         (kill-buffer name)))))
+
+(ert-deftest ifilter-test-cleanup ()
+  (ifilter-test-with-buffer
+    (ifilter-test-input "foo")
+    (setq ifilter--timer (run-with-timer 60 nil #'ignore))
+    (let ((timer ifilter--timer))
+      (fundamental-mode)
+      (should-not (memq timer timer-list)))
+    (should-not (overlays-in (point-min) (point-max)))
+    (should (= (buffer-size) 0))))
 
 (defun ifilter-test-outline (text)
   "Return the outline candidates of TEXT, as (PATH . POSITION)."

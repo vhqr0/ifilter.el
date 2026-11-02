@@ -29,9 +29,8 @@ In the buffer:
 - `C-c C-s` suspends updating the filter automatically.
 - `g` collects the candidates again, keeping the filter.
 
-A tool is a child mode of `ifilter-mode` and a command opening its buffer
-by `ifilter-open`, which collects the candidates and creates the buffer
-only if there is no such buffer.  The mode:
+A tool is a child mode of `ifilter-mode` and a command opening its
+buffer.  The mode:
 
 - binds the commands on the candidates, which get the candidate at point
   by `ifilter-candidate`;
@@ -47,6 +46,9 @@ only if there is no such buffer.  The mode:
   as in `ifilter-imenu`.
 - `ifilter-kill-ring` shows the kill ring.  `RET` makes a kill the latest
   one.
+
+`ifilter-imenu` and `ifilter-outline` each show in one buffer.  Called
+from another buffer, they show its items instead, clearing the filter.
 
 ## Configuration
 
