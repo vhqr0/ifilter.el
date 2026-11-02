@@ -229,6 +229,26 @@ The filter is not updated automatically."
     (should-not (overlays-in (point-min) (point-max)))
     (should (= (buffer-size) 0))))
 
+(ert-deftest ifilter-test-line ()
+  (let ((name "*ifilter-line*"))
+    (when (get-buffer name)
+      (kill-buffer name))
+    (unwind-protect
+        (save-window-excursion
+          (with-temp-buffer
+            (insert "foo\n\nbar\n")
+            (let ((source (current-buffer)))
+              (ifilter-line)
+              ;; Without the empty line.
+              (should (equal (ifilter-test-shown) '(("foo" . 1) ("bar" . 6))))
+              (ifilter-test-input "bar")
+              (goto-char (point-max))
+              (ifilter-line-goto)
+              (should (eq (current-buffer) source))
+              (should (= (point) 6)))))
+      (when (get-buffer name)
+        (kill-buffer name)))))
+
 (defun ifilter-test-outline (text)
   "Return the outline candidates of TEXT, as (PATH . POSITION)."
   (with-temp-buffer

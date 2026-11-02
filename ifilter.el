@@ -360,12 +360,9 @@ If DISPLAY is non-nil, only display it, keeping the selected window."
           (ifilter-render candidates))))
     (switch-to-buffer-other-window buffer)))
 
-;;; outline
+;;; line
 
-(defvar-local ifilter-outline--buffer nil
-  "Buffer of the headings shown in the current buffer.")
-
-(defun ifilter-outline--line (beg)
+(defun ifilter--line (beg)
   "Return the line from BEG to its end, keeping only its faces."
   (let* ((end (save-excursion (goto-char beg) (pos-eol)))
          (line (buffer-substring-no-properties beg end))
@@ -379,6 +376,80 @@ If DISPLAY is non-nil, only display it, keeping the selected window."
           (put-text-property (- pos beg) (- next beg) 'face face line))
         (setq pos next)))
     line))
+
+(defvar-local ifilter-line--buffer nil
+  "Buffer of the lines shown in the current buffer.")
+
+(defun ifilter-line--candidates (buffer)
+  "Return the lines of BUFFER as candidates, with their positions as data."
+  (with-current-buffer buffer
+    ;; At once, rather than line by line.
+    (font-lock-ensure)
+    (save-excursion
+      (goto-char (point-min))
+      (let (candidates)
+        (while (not (eobp))
+          (push (cons (ifilter--line (point)) (point)) candidates)
+          (forward-line 1))
+        (nreverse candidates)))))
+
+(defun ifilter-line--revert (&rest _)
+  "Show the lines of `ifilter-line--buffer' again."
+  (unless (buffer-live-p ifilter-line--buffer)
+    (user-error "Buffer of the lines killed"))
+  (ifilter-render (ifilter-line--candidates ifilter-line--buffer)))
+
+(defun ifilter-line-goto (&optional display)
+  "Jump to the line at point in another window.
+If DISPLAY is non-nil, only display it, keeping the selected window."
+  (interactive)
+  (let ((pos (cdr (ifilter--candidate-or-error))))
+    (unless (buffer-live-p ifilter-line--buffer)
+      (user-error "Buffer of the lines killed"))
+    (with-selected-window (if display
+                              (display-buffer ifilter-line--buffer t)
+                            (switch-to-buffer-other-window ifilter-line--buffer)
+                            (selected-window))
+      (goto-char pos))))
+
+(defun ifilter-line-display ()
+  "Display the line at point in another window."
+  (interactive)
+  (ifilter-line-goto t))
+
+(defvar-keymap ifilter-line-mode-map
+  "RET" #'ifilter-line-goto
+  "M-RET" #'ifilter-line-display)
+
+(define-derived-mode ifilter-line-mode ifilter-mode "IFilter-Line"
+  "Mode of the buffers filtering the lines of a buffer."
+  (setq-local revert-buffer-function #'ifilter-line--revert))
+
+;;;###autoload
+(defun ifilter-line ()
+  "Show the lines of the current buffer to filter."
+  (interactive)
+  (when (derived-mode-p 'ifilter-mode)
+    (user-error "Already in an ifilter buffer"))
+  (let ((source (current-buffer))
+        (buffer (get-buffer-create "*ifilter-line*")))
+    ;; As in `ifilter-imenu'.
+    (unless (with-current-buffer buffer
+              (and (derived-mode-p 'ifilter-line-mode)
+                   (eq ifilter-line--buffer source)))
+      (let ((candidates (ifilter-line--candidates source))
+            (dir default-directory))
+        (with-current-buffer buffer
+          (ifilter-line-mode)
+          (setq ifilter-line--buffer source
+                default-directory dir)
+          (ifilter-render candidates))))
+    (switch-to-buffer-other-window buffer)))
+
+;;; outline
+
+(defvar-local ifilter-outline--buffer nil
+  "Buffer of the headings shown in the current buffer.")
 
 (defun ifilter-outline--candidates (buffer)
   "Return the headings of BUFFER as candidates.
@@ -401,7 +472,7 @@ by \" / \", and has its marker as data."
             ;; Fill the skipped levels.
             (while (< (length stack) (1- level))
               (push "" stack))
-            (push (ifilter-outline--line beg) stack)
+            (push (ifilter--line beg) stack)
             (push (cons (string-join (reverse stack) " / ") (copy-marker beg))
                   candidates)
             (goto-char end)
