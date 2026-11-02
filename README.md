@@ -36,10 +36,7 @@ only if there is no such buffer.  The mode:
 - binds the commands on the candidates, which get the candidate at point
   by `ifilter-candidate`;
 - sets `revert-buffer-function` to collect the candidates again and call
-  `ifilter-render`;
-- calls `(ifilter-setup-auto-update DELAY)` to update the filter
-  automatically: if DELAY is positive, the seconds to wait after the last
-  command; if 0 or nil, after each command; if negative, never.
+  `ifilter-render`.
 
 ## Tools
 
@@ -53,11 +50,10 @@ only if there is no such buffer.  The mode:
 
 ## Configuration
 
-To update the filter 0.2 seconds after the last command, instead of after
-each command:
+The filter is updated automatically `ifilter-delay` seconds after the
+last command, 0.2 by default.  To wait longer, or never:
 
 ```elisp
-(setq ifilter-imenu-delay 0.2
-      ifilter-outline-delay 0.2
-      ifilter-kill-ring-delay 0.2)
+(setq ifilter-delay 0.5)
+(setq ifilter-delay -1)
 ```

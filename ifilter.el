@@ -29,7 +29,7 @@
 ;; buffer by `ifilter-open'.  The mode binds the commands on the
 ;; candidates, which get the candidate at point by `ifilter-candidate',
 ;; sets `revert-buffer-function' to collect the candidates again and call
-;; `ifilter-render', and calls `ifilter-setup-auto-update'.
+;; `ifilter-render'.
 ;;
 ;; The tools:
 ;;
@@ -41,11 +41,11 @@
 ;; - `ifilter-kill-ring' shows the kill ring.  `RET' makes a kill the
 ;;   latest one.
 ;;
-;; To update the filter 0.2 seconds after the last command:
+;; The filter is updated automatically `ifilter-delay' seconds after the
+;; last command.  To wait longer, or never:
 ;;
-;;   (setq ifilter-imenu-delay 0.2
-;;         ifilter-outline-delay 0.2
-;;         ifilter-kill-ring-delay 0.2)
+;;   (setq ifilter-delay 0.5)
+;;   (setq ifilter-delay -1)
 
 ;;; Code:
 
@@ -132,6 +132,11 @@ move point to the beginning of the buffer."
 
 ;;;; update
 
+(defcustom ifilter-delay 0.2
+  "Seconds to wait after the last command before updating the filter.
+If negative, the filter is not updated automatically."
+  :type 'number)
+
 (defface ifilter-match
   '((t :inherit match))
   "Face of the parts of candidates matching the filter.")
@@ -204,7 +209,7 @@ Unlike updating automatically, it is not suspended."
 
 (defun ifilter--auto-update (buffer)
   "Apply the filter of BUFFER, unless suspended or BUFFER is killed.
-Run by the hook or timer of `ifilter-setup-auto-update'."
+Run by the timer updating it automatically."
   (when (buffer-live-p buffer)
     (with-current-buffer buffer
       (unless (or ifilter--suspend-p (null ifilter--widget))
@@ -225,27 +230,6 @@ Resuming updates it at once."
     (cancel-timer ifilter--timer)
     (setq ifilter--timer nil)))
 
-(defun ifilter-setup-auto-update (delay)
-  "Update the filter of the current buffer automatically, by DELAY.
-If DELAY is positive, update DELAY seconds after the last command, by a
-timer replacing the one of the command before.  If 0 or nil, update
-after each command.  If negative, do nothing.
-Call it in the body of a child mode of `ifilter-mode'."
-  (let ((delay (or delay 0)))
-    (unless (minusp delay)
-      (add-hook 'post-command-hook
-                (lambda ()
-                  (if (plusp delay)
-                      (progn
-                        (ifilter--cancel-timer)
-                        (setq ifilter--timer
-                              (run-with-timer delay nil #'ifilter--auto-update
-                                              (current-buffer))))
-                    (ifilter--auto-update (current-buffer))))
-                nil t)
-      (add-hook 'kill-buffer-hook #'ifilter--cancel-timer nil t)
-      (add-hook 'change-major-mode-hook #'ifilter--cancel-timer nil t))))
-
 ;;;; mode
 
 (defvar-keymap ifilter-mode-map
@@ -259,12 +243,23 @@ Call it in the body of a child mode of `ifilter-mode'."
 (define-derived-mode ifilter-mode special-mode "IFilter"
   "Parent mode of the buffers filtering a list.
 Show the candidates by `ifilter-render'.  The filter is updated
-automatically only if set up by `ifilter-setup-auto-update'."
+automatically as `ifilter-delay'."
   ;; The filter field is editable, and the text outside it is protected
   ;; by `widget-before-change'.
   (setq buffer-read-only nil)
   (setq truncate-lines t)
-  (add-to-invisibility-spec 'ifilter))
+  (add-to-invisibility-spec 'ifilter)
+  (unless (minusp ifilter-delay)
+    ;; Update by a timer replacing the one of the last command.
+    (add-hook 'post-command-hook
+              (lambda ()
+                (ifilter--cancel-timer)
+                (setq ifilter--timer
+                      (run-with-timer ifilter-delay nil #'ifilter--auto-update
+                                      (current-buffer))))
+              nil t)
+    (add-hook 'kill-buffer-hook #'ifilter--cancel-timer nil t)
+    (add-hook 'change-major-mode-hook #'ifilter--cancel-timer nil t)))
 
 (defun ifilter-open (name mode collect &optional setup)
   "Switch to the buffer NAME in another window.
@@ -292,11 +287,6 @@ Signal `user-error' in a buffer of `ifilter-mode'."
 (declare-function imenu-flush-cache "imenu")
 (declare-function imenu--make-index-alist "imenu")
 (declare-function imenu--flatten-index-alist "imenu")
-
-(defcustom ifilter-imenu-delay nil
-  "Delay of updating the filter automatically in `ifilter-imenu'.
-See `ifilter-setup-auto-update' for the values."
-  :type '(choice (const nil) number))
 
 (defvar-local ifilter-imenu--buffer nil
   "Buffer of the index shown in the current buffer.")
@@ -345,8 +335,7 @@ If DISPLAY is non-nil, only display it, keeping the selected window."
 
 (define-derived-mode ifilter-imenu-mode ifilter-mode "IFilter-Imenu"
   "Mode of the buffers filtering the index of a buffer."
-  (setq-local revert-buffer-function #'ifilter-imenu--revert)
-  (ifilter-setup-auto-update ifilter-imenu-delay))
+  (setq-local revert-buffer-function #'ifilter-imenu--revert))
 
 ;;;###autoload
 (defun ifilter-imenu ()
@@ -360,11 +349,6 @@ If DISPLAY is non-nil, only display it, keeping the selected window."
                   (lambda () (setq ifilter-imenu--buffer buffer)))))
 
 ;;; outline
-
-(defcustom ifilter-outline-delay nil
-  "Delay of updating the filter automatically in `ifilter-outline'.
-See `ifilter-setup-auto-update' for the values."
-  :type '(choice (const nil) number))
 
 (defvar-local ifilter-outline--buffer nil
   "Buffer of the headings shown in the current buffer.")
@@ -443,8 +427,7 @@ If DISPLAY is non-nil, only display it, keeping the selected window."
 
 (define-derived-mode ifilter-outline-mode ifilter-mode "IFilter-Outline"
   "Mode of the buffers filtering the outline headings of a buffer."
-  (setq-local revert-buffer-function #'ifilter-outline--revert)
-  (ifilter-setup-auto-update ifilter-outline-delay))
+  (setq-local revert-buffer-function #'ifilter-outline--revert))
 
 ;;;###autoload
 (defun ifilter-outline ()
@@ -461,11 +444,6 @@ If DISPLAY is non-nil, only display it, keeping the selected window."
 (defcustom ifilter-kill-ring-width 200
   "Maximum number of characters shown of a kill."
   :type 'natnum)
-
-(defcustom ifilter-kill-ring-delay nil
-  "Delay of updating the filter automatically in `ifilter-kill-ring'.
-See `ifilter-setup-auto-update' for the values."
-  :type '(choice (const nil) number))
 
 (defun ifilter-kill-ring--candidates ()
   "Return the kills as candidates."
@@ -488,8 +466,7 @@ See `ifilter-setup-auto-update' for the values."
 
 (define-derived-mode ifilter-kill-ring-mode ifilter-mode "IFilter-Kill-Ring"
   "Mode of the buffer filtering the kill ring."
-  (setq-local revert-buffer-function #'ifilter-kill-ring--revert)
-  (ifilter-setup-auto-update ifilter-kill-ring-delay))
+  (setq-local revert-buffer-function #'ifilter-kill-ring--revert))
 
 ;;;###autoload
 (defun ifilter-kill-ring ()
