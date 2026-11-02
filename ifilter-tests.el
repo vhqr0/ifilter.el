@@ -249,6 +249,28 @@ The filter is not updated automatically."
       (when (get-buffer name)
         (kill-buffer name)))))
 
+(ert-deftest ifilter-test-line-at-point ()
+  (let ((name "*ifilter-line*"))
+    (when (get-buffer name)
+      (kill-buffer name))
+    (unwind-protect
+        (save-window-excursion
+          (with-temp-buffer
+            (emacs-lisp-mode)
+            (insert "a.b\naxb\n")
+            (goto-char (point-min))
+            (let ((source (current-buffer)))
+              (ifilter-line)
+              (ifilter-test-input "x")
+              ;; From the same buffer, replace the filter kept.
+              (with-current-buffer source
+                (ifilter-line-at-point))
+              (with-current-buffer name
+                (should (equal (widget-value ifilter--widget) "a\\.b"))
+                (should (equal (mapcar #'cdr (ifilter-test-shown)) '(1)))))))
+      (when (get-buffer name)
+        (kill-buffer name)))))
+
 (defun ifilter-test-outline (text)
   "Return the outline candidates of TEXT, as (PATH . POSITION)."
   (with-temp-buffer

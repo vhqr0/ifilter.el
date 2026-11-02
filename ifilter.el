@@ -446,6 +446,16 @@ If DISPLAY is non-nil, only display it, keeping the selected window."
           (ifilter-render candidates))))
     (switch-to-buffer-other-window buffer)))
 
+;;;###autoload
+(defun ifilter-line-at-point ()
+  "Show the lines of the current buffer, filtered by the symbol at point.
+As `ifilter-line', but replace the filter with the symbol quoted."
+  (interactive)
+  (let ((symbol (thing-at-point 'symbol t)))
+    (ifilter-line)
+    (widget-value-set ifilter--widget (regexp-quote (or symbol "")))
+    (ifilter-update)))
+
 ;;; outline
 
 (defvar-local ifilter-outline--buffer nil
