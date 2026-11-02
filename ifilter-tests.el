@@ -257,7 +257,7 @@ The filter is not updated automatically."
     (setq-local outline-level (lambda () (- (match-end 0) (match-beginning 0) 3)))
     (mapcar (lambda (candidate)
               (cons (substring-no-properties (car candidate))
-                    (marker-position (cdr candidate))))
+                    (cdr candidate)))
             (ifilter-outline--candidates (current-buffer)))))
 
 (ert-deftest ifilter-test-outline ()

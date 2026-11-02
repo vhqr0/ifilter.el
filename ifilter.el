@@ -454,7 +454,7 @@ If DISPLAY is non-nil, only display it, keeping the selected window."
 (defun ifilter-outline--candidates (buffer)
   "Return the headings of BUFFER as candidates.
 A heading is shown as its path, the lines of it and its ancestors joined
-by \" / \", and has its marker as data."
+by \" / \", and has its position as data."
   (with-current-buffer buffer
     (save-excursion
       (goto-char (point-min))
@@ -473,7 +473,7 @@ by \" / \", and has its marker as data."
             (while (< (length stack) (1- level))
               (push "" stack))
             (push (ifilter--line beg) stack)
-            (push (cons (string-join (reverse stack) " / ") (copy-marker beg))
+            (push (cons (string-join (reverse stack) " / ") beg)
                   candidates)
             (goto-char end)
             (when (= end beg)
@@ -490,14 +490,14 @@ by \" / \", and has its marker as data."
   "Jump to the heading at point in another window.
 If DISPLAY is non-nil, only display it, keeping the selected window."
   (interactive)
-  (let ((marker (cdr (ifilter--candidate-or-error))))
+  (let ((pos (cdr (ifilter--candidate-or-error))))
     (unless (buffer-live-p ifilter-outline--buffer)
       (user-error "Buffer of the headings killed"))
     (with-selected-window (if display
                               (display-buffer ifilter-outline--buffer t)
                             (switch-to-buffer-other-window ifilter-outline--buffer)
                             (selected-window))
-      (goto-char marker))))
+      (goto-char pos))))
 
 (defun ifilter-outline-display ()
   "Display the heading at point in another window."
