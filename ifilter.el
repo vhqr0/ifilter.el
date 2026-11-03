@@ -234,20 +234,6 @@ Resuming updates it at once."
     (cancel-timer ifilter--timer)
     (setq ifilter--timer nil)))
 
-(defun ifilter--cleanup ()
-  "Cancel the timer, and delete the filter field and the candidates.
-Run before changing the major mode, which kills the local variables
-referring to them."
-  (ifilter--cancel-timer)
-  (let ((inhibit-read-only t))
-    (when ifilter--widget
-      (widget-delete ifilter--widget)
-      (setq ifilter--widget nil))
-    (remove-overlays (point-min) (point-max) 'ifilter t)
-    ;; Including the text typed at the beginning of the field, which
-    ;; `widget-delete' misses.
-    (erase-buffer)))
-
 ;;;; mode
 
 (defvar-keymap ifilter-mode-map
@@ -267,7 +253,6 @@ automatically as `ifilter-delay'."
   (setq buffer-read-only nil)
   (setq truncate-lines t)
   (add-to-invisibility-spec 'ifilter)
-  (add-hook 'change-major-mode-hook #'ifilter--cleanup nil t)
   (unless (minusp ifilter-delay)
     ;; Update by a timer replacing the one of the last command.
     (add-hook 'post-command-hook
@@ -345,18 +330,20 @@ If DISPLAY is non-nil, only display it, keeping the selected window."
   (when (derived-mode-p 'ifilter-mode)
     (user-error "Already in an ifilter buffer"))
   (let ((source (current-buffer))
-        (buffer (get-buffer-create "*ifilter-imenu*")))
-    ;; Show the index of another buffer again in the mode entered again,
-    ;; clearing the filter.
-    (unless (with-current-buffer buffer
-              (and (derived-mode-p 'ifilter-imenu-mode)
-                   (eq ifilter-imenu--buffer source)))
-      (let ((candidates (ifilter-imenu--candidates source))
-            (dir default-directory))
+        (buffer (get-buffer "*ifilter-imenu*")))
+    ;; Show the index of another buffer, or in another mode, in a new
+    ;; buffer, clearing the filter.
+    (unless (and buffer
+                 (with-current-buffer buffer
+                   (and (derived-mode-p 'ifilter-imenu-mode)
+                        (eq ifilter-imenu--buffer source))))
+      (let ((candidates (ifilter-imenu--candidates source)))
+        (when buffer
+          (kill-buffer buffer))
+        (setq buffer (generate-new-buffer "*ifilter-imenu*"))
         (with-current-buffer buffer
           (ifilter-imenu-mode)
-          (setq ifilter-imenu--buffer source
-                default-directory dir)
+          (setq ifilter-imenu--buffer source)
           (ifilter-render candidates))))
     (switch-to-buffer-other-window buffer)))
 
@@ -432,17 +419,19 @@ If DISPLAY is non-nil, only display it, keeping the selected window."
   (when (derived-mode-p 'ifilter-mode)
     (user-error "Already in an ifilter buffer"))
   (let ((source (current-buffer))
-        (buffer (get-buffer-create "*ifilter-line*")))
+        (buffer (get-buffer "*ifilter-line*")))
     ;; As in `ifilter-imenu'.
-    (unless (with-current-buffer buffer
-              (and (derived-mode-p 'ifilter-line-mode)
-                   (eq ifilter-line--buffer source)))
-      (let ((candidates (ifilter-line--candidates source))
-            (dir default-directory))
+    (unless (and buffer
+                 (with-current-buffer buffer
+                   (and (derived-mode-p 'ifilter-line-mode)
+                        (eq ifilter-line--buffer source))))
+      (let ((candidates (ifilter-line--candidates source)))
+        (when buffer
+          (kill-buffer buffer))
+        (setq buffer (generate-new-buffer "*ifilter-line*"))
         (with-current-buffer buffer
           (ifilter-line-mode)
-          (setq ifilter-line--buffer source
-                default-directory dir)
+          (setq ifilter-line--buffer source)
           (ifilter-render candidates))))
     (switch-to-buffer-other-window buffer)))
 
@@ -529,17 +518,19 @@ If DISPLAY is non-nil, only display it, keeping the selected window."
   (when (derived-mode-p 'ifilter-mode)
     (user-error "Already in an ifilter buffer"))
   (let ((source (current-buffer))
-        (buffer (get-buffer-create "*ifilter-outline*")))
+        (buffer (get-buffer "*ifilter-outline*")))
     ;; As in `ifilter-imenu'.
-    (unless (with-current-buffer buffer
-              (and (derived-mode-p 'ifilter-outline-mode)
-                   (eq ifilter-outline--buffer source)))
-      (let ((candidates (ifilter-outline--candidates source))
-            (dir default-directory))
+    (unless (and buffer
+                 (with-current-buffer buffer
+                   (and (derived-mode-p 'ifilter-outline-mode)
+                        (eq ifilter-outline--buffer source))))
+      (let ((candidates (ifilter-outline--candidates source)))
+        (when buffer
+          (kill-buffer buffer))
+        (setq buffer (generate-new-buffer "*ifilter-outline*"))
         (with-current-buffer buffer
           (ifilter-outline-mode)
-          (setq ifilter-outline--buffer source
-                default-directory dir)
+          (setq ifilter-outline--buffer source)
           (ifilter-render candidates))))
     (switch-to-buffer-other-window buffer)))
 

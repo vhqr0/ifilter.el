@@ -204,10 +204,12 @@ The filter is not updated automatically."
                 (ifilter-outline))
               (should (equal (widget-value ifilter--widget) "b"))
               (ifilter-test-with-outline-source "/b/"
-                (let ((source (current-buffer)))
-                  ;; From another buffer, show its headings and clear
-                  ;; the filter.
+                (let ((source (current-buffer))
+                      (old (get-buffer name)))
+                  ;; From another buffer, show its headings in a new
+                  ;; buffer, clearing the filter.
                   (ifilter-outline)
+                  (should-not (buffer-live-p old))
                   (should (eq ifilter-outline--buffer source))
                   (should (equal default-directory "/b/"))
                   (should (equal (widget-value ifilter--widget) ""))
@@ -218,16 +220,6 @@ The filter is not updated automatically."
                                         (overlays-in (point-min) (point-max)))))))))
       (when (get-buffer name)
         (kill-buffer name)))))
-
-(ert-deftest ifilter-test-cleanup ()
-  (ifilter-test-with-buffer
-    (ifilter-test-input "foo")
-    (setq ifilter--timer (run-with-timer 60 nil #'ignore))
-    (let ((timer ifilter--timer))
-      (fundamental-mode)
-      (should-not (memq timer timer-list)))
-    (should-not (overlays-in (point-min) (point-max)))
-    (should (= (buffer-size) 0))))
 
 (ert-deftest ifilter-test-line ()
   (let ((name "*ifilter-line*"))
