@@ -88,7 +88,7 @@ The filter is not updated automatically."
     (ifilter-test-input "")
     (should (equal (mapcar #'cdr (ifilter-test-shown)) '(1 2 3)))))
 
-(ert-deftest ifilter-test-read-filter ()
+(ert-deftest ifilter-test-set-filter ()
   (ifilter-test-with-buffer
     (ifilter-test-input "foo")
     ;; On the candidate 2, kept by the filter.
@@ -102,7 +102,7 @@ The filter is not updated automatically."
       ;; Not shifted, as the field is padded to its width.
       (should (= (point) pos)))
     (should (equal (cdr (ifilter-candidate)) 2))
-    (should (eq (keymap-lookup ifilter-field-map "C-c C-/") #'ifilter-read-filter))
+    (should (eq (keymap-lookup ifilter-field-map "C-c C-/") #'ifilter-set-filter))
     (should (equal (widget-value ifilter--widget) "foo baz"))
     (should (equal (mapcar #'cdr (ifilter-test-shown)) '(2)))))
 
@@ -259,7 +259,10 @@ The filter is not updated automatically."
                 (ifilter-line-at-point))
               (with-current-buffer name
                 (should (equal (widget-value ifilter--widget) "a\\.b"))
-                (should (equal (mapcar #'cdr (ifilter-test-shown)) '(1)))))))
+                (should (equal (mapcar #'cdr (ifilter-test-shown)) '(1))))
+              (with-current-buffer source
+                (goto-char (point-max))
+                (should-error (ifilter-line-at-point) :type 'user-error)))))
       (when (get-buffer name)
         (kill-buffer name)))))
 

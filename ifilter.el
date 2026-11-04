@@ -83,7 +83,7 @@
   :parent widget-field-keymap
   "C-c C-u" #'ifilter-update
   "C-c C-s" #'ifilter-toggle-suspend
-  "C-c C-/" #'ifilter-read-filter)
+  "C-c C-/" #'ifilter-set-filter)
 
 (defun ifilter-render (candidates)
   "Show CANDIDATES in the current buffer under the filter field.
@@ -196,14 +196,14 @@ Unlike updating automatically, it is not suspended."
         (quit
          (message "Quit"))))))
 
-(defun ifilter-read-filter ()
-  "Read the filter in the minibuffer, and apply it at once, keeping point."
-  (interactive)
-  (let ((input (read-string "Filter: " (widget-value ifilter--widget))))
-    ;; Setting the field moves point.
-    (save-excursion
-      (widget-value-set ifilter--widget input))
-    (ifilter-update)))
+(defun ifilter-set-filter (input)
+  "Set the filter to INPUT, and apply it at once, keeping point.
+Interactively, read INPUT in the minibuffer."
+  (interactive (list (read-string "Filter: " (widget-value ifilter--widget))))
+  ;; Setting the field moves point.
+  (save-excursion
+    (widget-value-set ifilter--widget input))
+  (ifilter-update))
 
 (defvar-local ifilter--suspend-p nil
   "Non-nil if updating the filter automatically is suspended.")
@@ -241,8 +241,8 @@ Resuming updates it at once."
   :parent (make-composed-keymap widget-keymap special-mode-map)
   "C-c C-u" #'ifilter-update
   "C-c C-s" #'ifilter-toggle-suspend
-  "C-c C-/" #'ifilter-read-filter
-  "/" #'ifilter-read-filter)
+  "C-c C-/" #'ifilter-set-filter
+  "/" #'ifilter-set-filter)
 
 (define-derived-mode ifilter-mode special-mode "IFilter"
   "Parent mode of the buffers filtering a list.
@@ -440,10 +440,11 @@ If DISPLAY is non-nil, only display it, keeping the selected window."
   "Show the lines of the current buffer, filtered by the symbol at point.
 As `ifilter-line', but replace the filter with the symbol quoted."
   (interactive)
-  (let ((symbol (thing-at-point 'symbol t)))
-    (ifilter-line)
-    (widget-value-set ifilter--widget (regexp-quote (or symbol "")))
-    (ifilter-update)))
+  (if-let* ((symbol (thing-at-point 'symbol t)))
+      (progn
+        (ifilter-line)
+        (ifilter-set-filter (regexp-quote symbol)))
+    (user-error "No symbol at point")))
 
 ;;; outline
 
