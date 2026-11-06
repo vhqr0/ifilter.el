@@ -161,6 +161,12 @@ It has the property `ifilter', to be deleted by updating the filter."
     (overlay-put overlay 'ifilter t)
     (overlay-put overlay prop value)))
 
+(defun ifilter--case-fold (regexp)
+  "Return `case-fold-search' for REGEXP, as isearch and occur do."
+  (if (and case-fold-search search-upper-case)
+      (isearch-no-upper-case-p regexp t)
+    case-fold-search))
+
 (defun ifilter-update ()
   "Apply the filter, if changed.
 Match it in the text of each line, hide the lines not matching it and
@@ -172,8 +178,9 @@ Unlike updating automatically, it is not suspended."
       ;; Hooks and timers run with `inhibit-quit', and a `quit' signaled
       ;; in `post-command-hook' would remove the update from it.
       (condition-case err
-          (let ((regexp (funcall ifilter-regexp-function input))
-                (inhibit-quit nil))
+          (let* ((regexp (funcall ifilter-regexp-function input))
+                 (case-fold-search (ifilter--case-fold regexp))
+                 (inhibit-quit nil))
             ;; Signal an invalid regexp before changing any line.
             (string-match-p regexp "")
             (remove-overlays (point-min) (point-max) 'ifilter t)

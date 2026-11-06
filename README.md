@@ -14,8 +14,8 @@ field of Customize, and each line after it shows a candidate.
 - A candidate is `(STRING . DATA)`.  STRING is shown and matched, with its
   newlines shown as `^J`.  The candidates of empty STRING are skipped.
 - The filter is a regexp, but spaces match any string, as `.*`.  It is
-  converted by `ifilter-regexp-function`, and matches ignoring case as
-  `case-fold-search`.
+  converted by `ifilter-regexp-function`, and matches ignoring case unless
+  it has an upper case letter, as isearch and occur.
 - The candidates not matching the filter are hidden by overlays, so
   filtering never changes the text, and `undo` only undoes the edits of
   the filter.

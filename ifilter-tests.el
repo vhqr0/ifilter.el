@@ -82,7 +82,12 @@ The filter is not updated automatically."
     (should (equal (mapcar #'cdr (ifilter-test-shown)) '(1 2)))
     (ifilter-test-input "o b")
     (should (equal (mapcar #'cdr (ifilter-test-shown)) '(1 2)))
+    ;; Not ignoring case with an upper case letter.
+    (ifilter-test-input "Foo")
+    (should (equal (mapcar #'cdr (ifilter-test-shown)) '(2)))
     (let ((case-fold-search nil))
+      (ifilter-test-input "foo")
+      (should (equal (mapcar #'cdr (ifilter-test-shown)) '(1)))
       (ifilter-test-input "Foo")
       (should (equal (mapcar #'cdr (ifilter-test-shown)) '(2))))
     (ifilter-test-input "")
